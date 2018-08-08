@@ -1,5 +1,7 @@
 # Customized protein database construction
 
+![Downloads](https://img.shields.io/github/downloads/wenbostar/customprodbj/total.svg)
+
 ## Introduction
 
 Customprodbj is a Java-based tool for customized protein database construction:
