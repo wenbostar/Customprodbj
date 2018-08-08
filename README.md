@@ -10,6 +10,8 @@ Customprodbj is a Java-based tool for customized protein database construction:
 
 ## Usage
 
+Please download Customprodbj program from the release page: https://github.com/wenbostar/customprodbj/releases
+
 java -jar customprodbj.jar 
 ```
  -d      mRNA fasta database
