@@ -916,7 +916,14 @@ public class DbCreator {
                     continue;
                 }
                 // System.out.println(transcript+"\t"+gMap.get(transcript).start+"\t"+gMap.get(transcript).end);
-                String dna_seq = gMap.get(transcript).mRNA_seq.substring(gMap.get(transcript).start-1, gMap.get(transcript).end);
+				String dna_seq = "";
+				try {
+                	dna_seq = gMap.get(transcript).mRNA_seq.substring(gMap.get(transcript).start-1, gMap.get(transcript).end);
+				} catch (StringIndexOutOfBoundsException e) {
+					e.printStackTrace();
+					System.out.println(transcript+"\t"+gMap.get(transcript).mRNA_seq.length()+"\t"+gMap.get(transcript).start+"\t"+gMap.get(transcript).end);
+					System.exit(1);
+				}
                 String protein = translateDNA(dna_seq);
                 Matcher pStopMatcher = pStop.matcher(protein);
                 if(pStopMatcher.find()){
