@@ -8,7 +8,10 @@ import org.apache.commons.cli.*;
 import org.apache.commons.lang3.StringUtils;
 
 import java.io.*;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.concurrent.ExecutorService;
@@ -56,9 +59,9 @@ public class DbCreator {
      * @param mRNA_db *_refGeneMrna.fa
      * @param gene_anno_file *__refGene.txt
      */
-    public DbCreator(String mRNA_db, String gene_anno_file){
+    public DbCreator(String mRNA_db, String gene_anno_file, BufferedWriter logWriter){
         try {
-            this.readAnnotationData(mRNA_db,gene_anno_file);
+            this.readAnnotationData(mRNA_db,gene_anno_file,logWriter);
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -93,7 +96,7 @@ public class DbCreator {
         options.addOption("h", false, "Help");
 
 
-        CommandLineParser parser = new PosixParser();
+        CommandLineParser parser = new DefaultParser();
         CommandLine cmd = parser.parse(options, args);
         if (cmd.hasOption("h") || cmd.hasOption("help") || args.length == 0) {
             HelpFormatter f = new HelpFormatter();
@@ -103,19 +106,33 @@ public class DbCreator {
             System.exit(0);
         }
 
-
-        String geneAnno = cmd.getOptionValue("r");
-        String genefa = cmd.getOptionValue("d");
-
-        DbCreator createDB4Annovar = new DbCreator(genefa,geneAnno);
-
+        String outdir = "./";
         if(cmd.hasOption("o")){
-            createDB4Annovar.outdir = cmd.getOptionValue("o");
-            File OD = new File(createDB4Annovar.outdir);
+            outdir = cmd.getOptionValue("o");
+            File OD = new File(outdir);
             if(!OD.isDirectory()){
                 OD.mkdirs();
             }
         }
+
+        DateFormat dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
+        Date date = new Date();
+
+        String logfile = outdir+"/log.txt";
+        System.out.println("log file:"+logfile);
+
+        BufferedWriter logWriter = new BufferedWriter(new FileWriter(new File(logfile)));
+        logWriter.write(dateFormat.format(date)+"\n");
+        logWriter.write("Command line:"+StringUtils.join(args," ")+"\n");
+
+
+        String geneAnno = cmd.getOptionValue("r");
+        String genefa = cmd.getOptionValue("d");
+
+        DbCreator createDB4Annovar = new DbCreator(genefa,geneAnno,logWriter);
+
+        createDB4Annovar.outdir = outdir;
+
 
         boolean includeRefProteins = false;
         if(cmd.hasOption("t")){
@@ -161,7 +178,7 @@ public class DbCreator {
                 for (int i = 1; i < d.length; i++) {
                     System.out.println(" => "+h[i]+" => "+ d[i]);
                     String prefix = sample_name + "-" + h[i];
-                    ArrayList<String> rfile = createDB4Annovar.run(d[i], prefix, false,true, true);
+                    ArrayList<String> rfile = createDB4Annovar.run(d[i], prefix, false,true, true,logWriter);
                     // h[i] is sample name
                     smap.put(h[i], rfile);
 
@@ -174,7 +191,7 @@ public class DbCreator {
             // merge
             System.out.println("Merge ...");
             String oprefix = IFL.getName().replaceAll(".txt","");
-            createDB4Annovar.merge(resfileMap, hList, oprefix, includeRefProteins);
+            createDB4Annovar.merge(resfileMap, hList, oprefix, includeRefProteins,logWriter);
         }else{
 
             String annovarRes = cmd.getOptionValue("i");
@@ -185,24 +202,30 @@ public class DbCreator {
             }else{
                 oprefix = "merge";
             }
-            createDB4Annovar.run(annovarRes,oprefix, includeRefProteins, verbose,true);
-            if(cmd.hasOption("ref")){
-                createDB4Annovar.outputRefProteinDB = cmd.getOptionValue("ref");
-            }else{
-                createDB4Annovar.outputRefProteinDB = "";
-            }
+            createDB4Annovar.run(annovarRes,oprefix, includeRefProteins, verbose,true,logWriter);
 
-            if(!createDB4Annovar.outputRefProteinDB.isEmpty()){
-                createDB4Annovar.addReferenceProteins(createDB4Annovar.gMap, createDB4Annovar.outputRefProteinDB);
-            }
 
         }
+
+        if(cmd.hasOption("ref")){
+            createDB4Annovar.outputRefProteinDB = cmd.getOptionValue("ref");
+        }else{
+            createDB4Annovar.outputRefProteinDB = "";
+        }
+
+        if(!createDB4Annovar.outputRefProteinDB.isEmpty()){
+            System.out.println("Reference protein db:"+createDB4Annovar.outputRefProteinDB);
+            createDB4Annovar.addReferenceProteins(createDB4Annovar.gMap, createDB4Annovar.outputRefProteinDB,logWriter);
+        }else{
+            System.out.println(createDB4Annovar.outputRefProteinDB);
+        }
+
+        logWriter.close();
 
     }
 
 
-    public void merge(HashMap<String,HashMap<String,ArrayList<String>>> resfileMap, ArrayList<String> h, String prefix, boolean addRef) throws IOException {
-
+    public void merge(HashMap<String,HashMap<String,ArrayList<String>>> resfileMap, ArrayList<String> h, String prefix, boolean addRef, BufferedWriter logWriter) throws IOException {
 
         HashMap<String, JVariant> mergeVarMap = new HashMap<>();
 
@@ -218,9 +241,9 @@ public class DbCreator {
                 String annofile = resfileMap.get(sample_name).get(fileClass).get(0);
                 String varfa = resfileMap.get(sample_name).get(fileClass).get(1);
 
-                System.out.println("Read " + annofile);
-                System.out.println("Read " + varfa + "\n");
-                HashMap<String, JVariant> varMap = readData(annofile, varfa);
+                logWriter.write("Read " + annofile+"\n");
+                logWriter.write("Read " + varfa + "\n");
+                HashMap<String, JVariant> varMap = readData(annofile, varfa,logWriter);
 
                 // varID => String varID = d[hMap.get("Chr")]+"_"+d[hMap.get("Start")]+"_"+d[hMap.get("End")]+"_"+d[hMap.get("Ref")]+"_"+d[hMap.get("Alt")]+"_"+d[hMap.get("mRNA")];
                 String sample_head = sample_name + " " + fileClass;
@@ -283,7 +306,7 @@ public class DbCreator {
         }
 
         if(addRef){
-            addReferenceProteins(gMap, pWriter);
+            addReferenceProteins(gMap, pWriter, logWriter);
         }
 
         annoWriter.close();
@@ -296,7 +319,7 @@ public class DbCreator {
     }
 
 
-    public HashMap<String, JVariant> readData(String annofile, String varfa) throws IOException {
+    public HashMap<String, JVariant> readData(String annofile, String varfa, BufferedWriter logWriter) throws IOException {
 
 
         HashMap<String,String> proMap = new HashMap<>();
@@ -342,7 +365,7 @@ public class DbCreator {
                 jVariant.protein_seq = proMap.get(d[hMap.get("Variant_ID")]);
                 jVariant.protein_header = proInfoMap.get(d[hMap.get("Variant_ID")]);
             }else{
-                System.err.println("Don't find protein sequence for variant: "+ d[hMap.get("Variant_ID")] + "("+line+") in file "+annofile+", "+varfa);
+                logWriter.write("Don't find protein sequence for variant: "+ d[hMap.get("Variant_ID")] + "("+line+") in file "+annofile+", "+varfa+"\n");
                 continue;
             }
 
@@ -356,7 +379,7 @@ public class DbCreator {
     }
 
 
-    private ArrayList<String> run(String variantAnno, String outfilePrefix, boolean addRef, boolean verbose, boolean addAnnoInfo) throws IOException {
+    private ArrayList<String> run(String variantAnno, String outfilePrefix, boolean addRef, boolean verbose, boolean addAnnoInfo, BufferedWriter logWriter) throws IOException {
 
         ////////////////////////////////////////////////////////////////////////////////////////////////////
         // output variant information
@@ -480,6 +503,7 @@ public class DbCreator {
             Matcher m2 = p2.matcher(AAChange_Gene);
             if(!m2.find()){
                 System.err.println("Error: invalid record found in exonic_variant_function file (exonic format error): <"+line+">");
+                logWriter.write("Error: invalid record found in exonic_variant_function file (exonic format error): <"+line+">"+"\n");
                 System.exit(1);
             }
 
@@ -571,7 +595,7 @@ public class DbCreator {
                         ref   = "REF";
                         obs   = mc9.group(3);
                     }else{
-                        System.err.println("Warning: invalid coding change format: <"+cchange+">"+ " within <"+ md[i]);
+                        logWriter.write("Warning: invalid coding change format: <"+cchange+">"+ " within <"+ md[i]+"\n");
                         continue;
                     }
 
@@ -622,6 +646,7 @@ public class DbCreator {
         HashMap<String,Integer>  flagged_transcript = new HashMap<>();
 
         System.out.println("Transcripts with variant: "+vMap.size());
+        logWriter.write("Transcripts with variant: "+vMap.size()+"\n");
 
         int nvar = 0;
 
@@ -635,7 +660,7 @@ public class DbCreator {
         for(String vID: vMap.keySet()){
             for(JVariant jv : vMap.get(vID)){
                 nvar++;
-                fixedThreadPool.execute(new TranslateVariantWorker(jv,nvar,verbose));
+                fixedThreadPool.execute(new TranslateVariantWorker(jv,nvar,verbose,logWriter));
             }
         }
 
@@ -659,6 +684,7 @@ public class DbCreator {
                         pWriter.write(jv.protein_seq + "\n");
                     }else{
                         System.err.println("Protein length is zero: "+jv.ID);
+                        logWriter.write("Protein length is zero: "+jv.ID+"\n");
                     }
                 }
             }
@@ -669,7 +695,7 @@ public class DbCreator {
 
         // Add the reference protein sequences into the output database
         if(addRef){
-            addReferenceProteins(gMap,pWriter);
+            addReferenceProteins(gMap,pWriter,logWriter);
         }
 
         pWriter.close();
@@ -685,7 +711,7 @@ public class DbCreator {
 
     }
 
-    public void readAnnotationData(String db, String geneAnno) throws IOException {
+    public void readAnnotationData(String db, String geneAnno, BufferedWriter logWriter) throws IOException {
         ////////////////////////////////////////////////////////////////////////////////////////////////////
         // read mRNA DNA sequences: hg19_refGeneMrna.fa
         File dbFile = new File(db);
@@ -732,6 +758,7 @@ public class DbCreator {
 
         }
         System.out.println("Read mRNA sequences: "+num);
+        logWriter.write("Read mRNA sequences: "+num+"\n");
         it.close();
         dbReader.close();
 
@@ -753,6 +780,7 @@ public class DbCreator {
             String d[] = line.split("\t");
             if(d.length<11){
                 System.err.println("Error: invalid record found in gene file (>=11 fields expected): <"+line+">");
+                logWriter.write("Error: invalid record found in gene file (>=11 fields expected): <"+line+">"+"\n");
                 System.exit(1);
             }
 
@@ -800,14 +828,14 @@ public class DbCreator {
             }
 
             if(!gMap.containsKey(name)){
-                System.out.println("Warning: remove ("+name+") "+line);
+                logWriter.write("Warning: remove ("+name+") "+line+"\n");
                 continue;
             }
 
             if(!gMap.get(name).infor.isEmpty()){
                 String infor = chr+":"+exonstart.split(",")[0];
                 if(!gMap.get(name).infor.equalsIgnoreCase(infor)){
-                    System.out.println("Warning: remove (used "+name+" "+gMap.get(name).infor+") "+line);
+                    logWriter.write("Warning: remove (used "+name+" "+gMap.get(name).infor+") "+line+"\n");
                     continue;
                 }
             }
@@ -899,10 +927,11 @@ public class DbCreator {
             }
         }
         System.out.println("Remove transcripts: "+n_remove_transcript);
+        logWriter.write("Remove transcripts: "+n_remove_transcript+"\n");
 
     }
 
-    public void addReferenceProteins(HashMap<String,JTranscript> gMap, BufferedWriter pWriter){
+    public void addReferenceProteins(HashMap<String,JTranscript> gMap, BufferedWriter pWriter, BufferedWriter logWriter) throws IOException {
 
         Pattern pStop = Pattern.compile("\\*.+");
         int nrefProteins = 0;
@@ -921,13 +950,13 @@ public class DbCreator {
                 	dna_seq = gMap.get(transcript).mRNA_seq.substring(gMap.get(transcript).start-1, gMap.get(transcript).end);
 				} catch (StringIndexOutOfBoundsException e) {
 					e.printStackTrace();
-					System.out.println(transcript+"\t"+gMap.get(transcript).mRNA_seq.length()+"\t"+gMap.get(transcript).start+"\t"+gMap.get(transcript).end);
+                    logWriter.write(transcript+"\t"+gMap.get(transcript).mRNA_seq.length()+"\t"+gMap.get(transcript).start+"\t"+gMap.get(transcript).end+"\n");
 					System.exit(1);
 				}
-                String protein = translateDNA(dna_seq);
+                String protein = translateDNA(dna_seq,logWriter);
                 Matcher pStopMatcher = pStop.matcher(protein);
                 if(pStopMatcher.find()){
-                    System.out.println("Warning:"+transcript+" "+gMap.get(transcript).cds_start+" "+ gMap.get(transcript).cds_end+"\t"+protein);
+                    logWriter.write("Warning:"+transcript+" "+gMap.get(transcript).cds_start+" "+ gMap.get(transcript).cds_end+"\t"+protein+"\n");
                 }
 
                 protein = protein.replaceAll("\\*.*$","");
@@ -943,17 +972,18 @@ public class DbCreator {
 
         }
         System.out.println("Reference proteins: "+nrefProteins);
+        logWriter.write("Reference proteins: "+nrefProteins+"\n");
 
     }
 
-    public void addReferenceProteins(HashMap<String,JTranscript> gMap, String file) throws IOException {
+    public void addReferenceProteins(HashMap<String,JTranscript> gMap, String file, BufferedWriter logWriter) throws IOException {
         BufferedWriter pWriter = new BufferedWriter(new FileWriter(new File(file)));
-        addReferenceProteins(gMap,pWriter);
+        addReferenceProteins(gMap,pWriter,logWriter);
         pWriter.close();
     }
 
 
-    public static String translateDNA(String dna){
+    public static String translateDNA(String dna,BufferedWriter logWriter) throws IOException {
         String protein = "";
         dna = dna.toUpperCase();
         Pattern p3 = Pattern.compile("(...)");
@@ -964,6 +994,7 @@ public class DbCreator {
                 protein = protein+codons.get(t3);
             }else{
                 System.err.println("Error: invalid triplets found in DNA sequence to be translated: <"+t3+"> in <"+dna+">");
+                logWriter.write("Error: invalid triplets found in DNA sequence to be translated: <"+t3+"> in <"+dna+">"+"\n");
                 System.exit(1);
             }
         }

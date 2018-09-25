@@ -3,6 +3,8 @@ package main.java;
 
 import org.apache.commons.lang3.StringUtils;
 
+import java.io.BufferedWriter;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.regex.Matcher;
@@ -21,12 +23,15 @@ public class TranslateVariantWorker implements  Runnable{
 
     public static String prefix4variantID = "VAR";
 
+    public BufferedWriter logWriter = null;
+
     private int nvar = 0;
 
-    public TranslateVariantWorker(JVariant jVariant, int nv, boolean vb) {
+    public TranslateVariantWorker(JVariant jVariant, int nv, boolean vb,BufferedWriter logWriter) {
         this.jv = jVariant;
         this.nvar = nv;
         this.verbose = vb;
+        this.logWriter = logWriter;
     }
 
 
@@ -43,22 +48,38 @@ public class TranslateVariantWorker implements  Runnable{
         String chr = jv.chr;
 
         if(verbose){
-            System.out.println("Process: "+jv.ID+" with "+jv.transcriptID+", "+jv.start+", "+jv.end+", "+jv.ref+", "+jv.obs+", "+jv.cchange+", "+jv.pchange);
+            try {
+                logWriter.write("Process: "+jv.ID+" with "+jv.transcriptID+", "+jv.start+", "+jv.end+", "+jv.ref+", "+jv.obs+", "+jv.cchange+", "+jv.pchange+"\n");
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
 
         if(!gMap.containsKey(jv.transcriptID)){
-            System.out.println("WARNING: cannot find mRNA sequence for "+jv.transcriptID+" in the fasta file!");
+            try {
+                logWriter.write("WARNING: cannot find mRNA sequence for "+jv.transcriptID+" in the fasta file!\n");
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
             jv.valid = false;
             return;
         }
         if(!gMap.containsKey(jv.transcriptID)){
-            System.out.println("WARNING: cannot find annotation for "+jv.transcriptID+" in the gene file or cannot infer the transcription start site");
+            try {
+                logWriter.write("WARNING: cannot find annotation for "+jv.transcriptID+" in the gene file or cannot infer the transcription start site\n");
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
             jv.valid = false;
             return;
         }
 
         if(jv.end > gMap.get(jv.transcriptID).mRNA_seq.length()){
-            System.out.println("ERROR: transcript end ("+gMap.get(jv.transcriptID).end+") for "+jv.transcriptID+" is longer than transcript length "+gMap.get(jv.transcriptID).mRNA_seq.length()+", skipping this transcript");
+            try {
+                logWriter.write("ERROR: transcript end ("+gMap.get(jv.transcriptID).end+") for "+jv.transcriptID+" is longer than transcript length "+gMap.get(jv.transcriptID).mRNA_seq.length()+", skipping this transcript\n");
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
             jv.valid = false;
             return;
         }
@@ -77,19 +98,27 @@ public class TranslateVariantWorker implements  Runnable{
             for(int i=0;i<dna.length;i++){
                 dnaList.add(dna[i]);
             }
-            String protein1;
+            String protein1 = null;
             String protein2;
             String warning = "";
 
             String cds = dna_seq;
 
             if(jv.end > dna.length){
-                System.out.println("ERROR in "+jv.ID+": end position of variant ("+jv.end+") in "+jv.transcriptID+" is longer than coding portion length "+dna.length+", skipping this transcript");
+                try {
+                    logWriter.write("ERROR in "+jv.ID+": end position of variant ("+jv.end+") in "+jv.transcriptID+" is longer than coding portion length "+dna.length+", skipping this transcript\n");
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
                 jv.valid = false;
                 return;
             }
 
-            protein1 = translateDNA(dna_seq);
+            try {
+                protein1 = translateDNA(dna_seq,logWriter);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
             Pattern pPro = Pattern.compile("\\*\\w");
             Matcher matcher = pPro.matcher(protein1);
             if(!matcher.find()){
@@ -123,23 +152,43 @@ public class TranslateVariantWorker implements  Runnable{
             for(int i=0;i<dna.length;i++){
                 dnaList.add(dna[i]);
             }
-            String protein1;
-            String protein2;
+            String protein1 = null;
+            String protein2 = null;
 
             String warning = "";
             int inframe = 0;
 
             if(jv.end > dna.length){
-                System.out.println("WARNING in "+ID+": end position of variant ("+end+") in "+transcript+" is longer than coding portion length "+dna.length+", possibly due to a deletion on a stop codon");
+                try {
+                    logWriter.write("WARNING in "+ID+": end position of variant ("+end+") in "+transcript+" is longer than coding portion length "+dna.length+", possibly due to a deletion on a stop codon\n");
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
             }
 
             if(verbose){
-                System.out.println(gMap.get(transcript).mRNA_seq+"\t"+(gMap.get(transcript).start-1)+","+(gMap.get(transcript).end - gMap.get(transcript).start + 1));
-                System.out.println("NOTICE: wild-type DNA sequence is "+dna_seq);
-                System.out.println("Include UTR: "+dna_seq_utr);
+                try {
+                    logWriter.write(gMap.get(transcript).mRNA_seq+"\t"+(gMap.get(transcript).start-1)+","+(gMap.get(transcript).end - gMap.get(transcript).start + 1)+"\n");
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                try {
+                    logWriter.write("NOTICE: wild-type DNA sequence is "+dna_seq+"\n");
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                try {
+                    logWriter.write("Include UTR: "+dna_seq_utr+"\n");
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
             }
 
-            protein1 = translateDNA(dna_seq);
+            try {
+                protein1 = translateDNA(dna_seq,logWriter);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
 
             // System.out.println(protein1);
 
@@ -196,7 +245,11 @@ public class TranslateVariantWorker implements  Runnable{
             String dna_seq_variant = StringUtils.join(dnaList,"");
 
             // protein2 should be truncated so that anything after stop codon be deleted
-            protein2 = translateDNA(dna_seq_variant);
+            try {
+                protein2 = translateDNA(dna_seq_variant,logWriter);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
 
             protein2 = protein2.replaceAll("\\*.+","*");
 
@@ -223,7 +276,11 @@ public class TranslateVariantWorker implements  Runnable{
                 if(protein1.equalsIgnoreCase(protein2)){
                     function = "silent";
                     if(verbose){
-                        System.out.println("NOTICE: silent variant!");
+                        try {
+                            logWriter.write("NOTICE: silent variant!\n");
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
                         jv.valid = false;
                         return;
                     }
@@ -415,7 +472,11 @@ public class TranslateVariantWorker implements  Runnable{
 
 
             if(function.equalsIgnoreCase("silent")){
-                System.out.println("Warning: silent => "+ transcript+"\tc."+cchange+"\tp."+pchange+"\t"+aachange);
+                try {
+                    logWriter.write("Warning: silent => "+ transcript+"\tc."+cchange+"\tp."+pchange+"\t"+aachange+"\n");
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
                 jv.valid = false;
                 return;
             }
