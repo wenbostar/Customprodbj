@@ -59,7 +59,8 @@ public class DbCreator {
      * @param mRNA_db *_refGeneMrna.fa
      * @param gene_anno_file *__refGene.txt
      */
-    public DbCreator(String mRNA_db, String gene_anno_file, BufferedWriter logWriter){
+    public DbCreator(String mRNA_db, String gene_anno_file, BufferedWriter logWriter,String out_dir){
+        this.outdir = out_dir;
         try {
             this.readAnnotationData(mRNA_db,gene_anno_file,logWriter);
         } catch (IOException e) {
@@ -129,9 +130,9 @@ public class DbCreator {
         String geneAnno = cmd.getOptionValue("r");
         String genefa = cmd.getOptionValue("d");
 
-        DbCreator createDB4Annovar = new DbCreator(genefa,geneAnno,logWriter);
+        DbCreator createDB4Annovar = new DbCreator(genefa,geneAnno,logWriter,outdir);
 
-        createDB4Annovar.outdir = outdir;
+        // createDB4Annovar.outdir = outdir;
 
 
         boolean includeRefProteins = false;
@@ -723,16 +724,21 @@ public class DbCreator {
         // (leftmost exon at chr1:222001007)
         Pattern gInforPattern = Pattern.compile("leftmost exon at (.+?:\\d+)");
 
+
+        HashSet<String> no_correct_orf_IDs = new HashSet<>();
+
         while (it.hasNext()) {
             FASTAElement el = it.next();
             el.setLineLength(1);
             String hLine = el.getHeader().trim();
-            // some transcripts (such as NM_001075) occur multiple times in a file, sometimes with bad ORF annotation
-            if(hLine.contains("does not have correct ORF annotation")){
-                continue;
-            }
             String headLine[] = hLine.split("\\s+");
             String pID = headLine[0];
+            // some transcripts (such as NM_001075) occur multiple times in a file, sometimes with bad ORF annotation
+            if(hLine.contains("does not have correct ORF annotation")){
+                no_correct_orf_IDs.add(pID);
+                continue;
+            }
+
 
             Matcher gInforMatcher = gInforPattern.matcher(hLine);
             String infor = "";
@@ -761,6 +767,15 @@ public class DbCreator {
         logWriter.write("Read mRNA sequences: "+num+"\n");
         it.close();
         dbReader.close();
+
+        String mRNA_used_fasta_file = this.outdir + "/mRNA_seq.fasta";
+        String mRNA_used_anno_file = this.outdir + "/mRNA_anno.txt";
+        System.out.println("Used mRNA sequences: "+mRNA_used_fasta_file);
+        BufferedWriter mRNA_Seq_W = new BufferedWriter(new FileWriter(new File(mRNA_used_fasta_file)));
+        for(String pID: gMap.keySet()){
+            mRNA_Seq_W.write(">"+pID+" "+gMap.get(pID).infor+"\n"+gMap.get(pID).mRNA_seq+"\n");
+        }
+        mRNA_Seq_W.close();
 
 
         ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -828,7 +843,11 @@ public class DbCreator {
             }
 
             if(!gMap.containsKey(name)){
-                logWriter.write("Warning: remove ("+name+") "+line+"\n");
+                if(no_correct_orf_IDs.contains(name)) {
+                    logWriter.write("Warning: remove (" + name +":does not have correct ORF annotation" + ") " + line + "\n");
+                }else{
+                    logWriter.write("Warning: remove (" + name + ") " + line + "\n");
+                }
                 continue;
             }
 
@@ -918,6 +937,7 @@ public class DbCreator {
 
         gReader.close();
 
+        // note:
         // delete any transcripts that occurs multiple times in human genome
         int n_remove_transcript = 0;
         for(String tname : transcriptCopy.keySet()){
