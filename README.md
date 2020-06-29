@@ -4,7 +4,7 @@
 
 ## Introduction
 
-Customprodbj is a Java-based tool for customized protein database construction:
+[Customprodbj](https://doi.org/10.1038/s41467-020-15456-w) is a Java-based tool for customized protein database construction:
 
   - Build a customized database based on single VCF file.
   - Build a customized database based on multiple VCF files from a sample.
