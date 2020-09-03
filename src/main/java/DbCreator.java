@@ -458,6 +458,20 @@ public class DbCreator {
             colNameMap.put("ExonicFunc","ExonicFunc.knownGene");
             colNameMap.put("AAChange","AAChange.knownGene");
 
+        }else{
+            // for example: Gene.wgEncodeGencodeBasicV28
+            // AAChange.wgEncodeGencodeBasicV28
+            for(String i: vheadMap.keySet()){
+                if(i.startsWith("AAChange")){
+                    String suffix_name = i.replaceFirst("AAChange.","");
+                    System.out.println("Annotation data:" + suffix_name);
+                    colNameMap.put("Func","Func."+suffix_name);
+                    colNameMap.put("Gene","Gene."+suffix_name);
+                    colNameMap.put("ExonicFunc","ExonicFunc."+suffix_name);
+                    colNameMap.put("AAChange","AAChange."+suffix_name);
+
+                }
+            }
         }
 
         // Func.refGene
